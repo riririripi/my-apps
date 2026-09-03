@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>ブロックパズル</title>
+<title>Block Puzzle</title>
 <style>
   :root {
     --bg: #3a3835;
@@ -44,11 +44,12 @@
     flex: 0 0 auto;
     display: flex;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-top: 8px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 4px;
+    order: 2;
   }
   .tab-btn {
     flex: 1;
@@ -73,6 +74,19 @@
     margin-bottom: 8px;
   }
   .topbar h1 { font-size: 16px; font-weight: 700; margin: 0; color: var(--onbg); }
+  .game-title {
+    font-size: 21px;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 0.04em;
+    margin: 0;
+    background: linear-gradient(120deg, #F2A868, #6FC96C 45%, #29AEC0 75%, #A98FE0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+  }
   .score-box {
     background: var(--card);
     border: 1px solid var(--border);
@@ -199,7 +213,7 @@
 
   <div class="screen active" id="gameScreen">
     <div class="topbar">
-      <h1>ブロックパズル</h1>
+      <h1 class="game-title">BLOCK PUZZLE</h1>
       <div style="display:flex; gap:8px;">
         <div class="score-box">
           <div class="label">スコア</div>
@@ -522,26 +536,20 @@ function checkTrayRefillAndGameOver() {
 // ---------- スコアの永続保存 ----------
 
 async function loadScoreHistory() {
-  if (!storageAvailable || typeof window.storage === 'undefined') {
-    historyLoaded = true;
-    renderScoreScreen();
-    return;
-  }
   try {
-    const res = await window.storage.get('block-puzzle-scores', false);
-    scoreHistory = res && res.value ? JSON.parse(res.value) : [];
+    const raw = localStorage.getItem('block-puzzle-scores');
+    scoreHistory = raw ? JSON.parse(raw) : [];
   } catch (err) {
     scoreHistory = [];
+    storageAvailable = false;
   }
   historyLoaded = true;
   renderScoreScreen();
 }
 
 async function saveScoreHistory() {
-  if (!storageAvailable || typeof window.storage === 'undefined') return;
   try {
-    const result = await window.storage.set('block-puzzle-scores', JSON.stringify(scoreHistory), false);
-    if (!result) storageAvailable = false;
+    localStorage.setItem('block-puzzle-scores', JSON.stringify(scoreHistory));
   } catch (err) {
     storageAvailable = false;
   }
