@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>ブロックパズル</title>
+<style>
+  :root {
+    --bg: #3a3835;
+    --card: #ffffff;
+    --border: #d9d4c9;
+    --border-strong: #b0aa9e;
+    --text: #2c2c2a;
+    --text-secondary: #5f5e5a;
+    --accent: #185fa5;
+    --danger: #a32d2d;
+    --cell-empty: #dedad2;
+    --gold: #b8860b;
+    --silver: #8a8a8a;
+    --bronze: #a0622f;
+    --onbg: #f4f2ee;
+    --onbg-secondary: #bdb8b0;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    color: var(--text);
+    overscroll-behavior: none;
+    height: 100%;
+  }
+  .wrap {
+    max-width: 420px;
+    margin: 0 auto;
+    height: 100dvh;
+    height: 100vh;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+  }
+  .tab-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 9px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .tab-btn.active { background: var(--accent); color: #fff; }
+  .screen { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  .topbar {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .topbar h1 { font-size: 16px; font-weight: 700; margin: 0; color: var(--onbg); }
+  .score-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 5px 14px;
+    text-align: center;
+    min-width: 80px;
+  }
+  .score-box .label { font-size: 10px; color: var(--text-secondary); }
+  .score-box .value { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+  .board-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px;
+    touch-action: none;
+  }
+  .cell { background: var(--cell-empty); border-radius: 5px; transition: background-color 0.1s; }
+  .cell.preview-ok { outline: 2px solid rgba(24,95,165,0.5); outline-offset: -2px; }
+  .cell.preview-bad { background: #f3d6d6 !important; }
+  .cell.clearing { animation: pop 0.28s ease-out forwards; }
+  @keyframes pop { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.4); opacity: 0; } }
+
+  .tray {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .piece-slot {
+    flex: 1;
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 64px;
+    padding: 4px;
+    touch-action: none;
+  }
+  .piece-slot.used { opacity: 0.25; }
+  .piece-slot.dragging-source { opacity: 0.25; }
+  .piece-slot.no-fit:not(.used) { opacity: 0.4; }
+  .piece-grid { display: grid; gap: 2px; }
+  .piece-cell { border-radius: 3px; }
+  .piece-cell.empty { background: transparent; }
+
+  .status { flex: 0 0 auto; margin-top: 6px; text-align: center; font-size: 12px; color: var(--onbg-secondary); min-height: 16px; }
+
+  .ghost-piece {
+    position: fixed; top: 0; left: 0;
+    display: grid; gap: 3px;
+    pointer-events: none; z-index: 999;
+    opacity: 0.85;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.25));
+  }
+  .ghost-cell { border-radius: 5px; }
+
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .overlay.show { display: flex; }
+  .overlay-card { background: var(--card); border-radius: 16px; padding: 26px 22px; text-align: center; max-width: 300px; }
+  .overlay-card h2 { margin: 0 0 6px; font-size: 19px; }
+  .overlay-card p { margin: 0 0 4px; color: var(--text-secondary); font-size: 14px; }
+  .overlay-card .rank-note { color: var(--accent); font-weight: 700; margin-bottom: 16px; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 12px 24px; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+  #scoreScreen { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .stat-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .stat-card {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); }
+  .stat-card .stat-value { font-size: 22px; font-weight: 700; color: var(--text); }
+  .stat-card.highlight .stat-value { color: var(--accent); }
+
+  .rank-title { font-size: 14px; font-weight: 700; margin: 10px 0 8px; }
+  .rank-list { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .rank-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .rank-item:last-child { border-bottom: none; }
+  .rank-num { width: 28px; text-align: center; font-weight: 700; color: var(--text-secondary); font-size: 13px; }
+  .rank-num.gold { color: var(--gold); }
+  .rank-num.silver { color: var(--silver); }
+  .rank-num.bronze { color: var(--bronze); }
+  .rank-score { flex: 1; font-weight: 700; }
+  .rank-date { font-size: 11px; color: var(--text-secondary); }
+  .rank-empty { text-align: center; padding: 24px; color: var(--text-secondary); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab-btn active" id="tabGameBtn">ゲーム</button>
+    <button class="tab-btn" id="tabScoreBtn">スコア</button>
+  </div>
+
+  <div class="screen active" id="gameScreen">
+    <div class="topbar">
+      <h1>ブロックパズル</h1>
+      <div style="display:flex; gap:8px;">
+        <div class="score-box">
+          <div class="label">スコア</div>
+          <div class="value" id="scoreVal">0</div>
+        </div>
+        <div class="score-box" id="comboBox" style="display:none;">
+          <div class="label">コンボ</div>
+          <div class="value" id="comboVal" style="color:var(--danger);">0</div>
+        </div>
+      </div>
+    </div>
+    <div class="board-container" id="boardContainer">
+      <div class="board" id="board"></div>
+    </div>
+    <div class="tray" id="tray"></div>
+    <div class="status" id="status">ブロックを指でつまんで、盤面までスライドして置こう</div>
+  </div>
+
+  <div class="screen" id="scoreScreen">
+    <div class="topbar"><h1>スコア</h1></div>
+    <div class="stat-row">
+      <div class="stat-card highlight">
+        <div class="stat-label">自己ベスト</div>
+        <div class="stat-value" id="statBest">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">プレイ回数</div>
+        <div class="stat-value" id="statGames">0</div>
+      </div>
+    </div>
+    <div class="rank-title">ランキング（上位10件）</div>
+    <div class="rank-list" id="rankList">
+      <div class="rank-empty">読み込み中…</div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-card">
+    <h2>ゲームオーバー</h2>
+    <p id="finalScore"></p>
+    <p class="rank-note" id="rankNote"></p>
+    <button class="btn" id="restartBtn">もう一度あそぶ</button>
+  </div>
+</div>
+
+<script>
+const SIZE = 8;
+const COLORS = ['#E25A5F', '#F2A868', '#F0D659', '#6FC96C', '#29AEC0', '#A98FE0'];
+
+const SHAPES = [
+  [[0,0]],
+  [[0,0],[0,1]],
+  [[0,0],[1,0]],
+  [[0,0],[0,1],[0,2]],
+  [[0,0],[1,0],[2,0]],
+  [[0,0],[0,1],[1,0],[1,1]],
+  [[0,0],[0,1],[0,2],[1,0]],
+  [[0,0],[0,1],[0,2],[1,2]],
+  [[0,0],[1,0],[1,1],[1,2]],
+  [[0,2],[1,0],[1,1],[1,2]],
+  [[0,0],[1,0],[1,1],[2,1]],
+  [[0,1],[1,0],[1,1],[2,0]],
+  [[0,0],[0,1],[0,2],[0,3]],
+  [[0,0],[1,0],[2,0],[3,0]],
+  [[0,0],[0,1],[1,0],[1,1],[2,0],[2,1]]
+];
+
+let board = emptyBoard();
+let score = 0;
+let comboCount = 0;
+let tray = [];
+let scoreHistory = [];
+let historyLoaded = false;
+let storageAvailable = true;
+
+let dragState = null;
+
+function emptyBoard() {
+  return Array.from({length: SIZE}, () => Array(SIZE).fill(null));
+}
+
+function randomPiece() {
+  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  return { shape, color, used: false };
+}
+
+function refillTray() { tray = [randomPiece(), randomPiece(), randomPiece()]; }
+
+function canPlace(shape, r0, c0) {
+  for (const [dr, dc] of shape) {
+    const r = r0 + dr, c = c0 + dc;
+    if (r < 0 || r >= SIZE || c < 0 || c >= SIZE) return false;
+    if (board[r][c]) return false;
+  }
+  return true;
+}
+
+function anyPlacementExists(shape) {
+  for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (canPlace(shape, r, c)) return true;
+  return false;
+}
+
+function placePiece(shape, color, r0, c0) {
+  for (const [dr, dc] of shape) board[r0 + dr][c0 + dc] = color;
+  score += shape.length;
+  updateScore();
+  clearLines();
+}
+
+function clearLines() {
+  const fullRows = [];
+  const fullCols = [];
+  for (let r = 0; r < SIZE; r++) if (board[r].every(v => v)) fullRows.push(r);
+  for (let c = 0; c < SIZE; c++) if (board.every(row => row[c])) fullCols.push(c);
+
+  renderBoard();
+
+  const clearedLines = fullRows.length + fullCols.length;
+
+  if (clearedLines === 0) {
+    if (comboCount > 0) {
+      comboCount = 0;
+      updateComboDisplay();
+    }
+    return;
+  }
+
+  const cellEls = document.querySelectorAll('#board .cell');
+  fullRows.forEach(r => { for (let c = 0; c < SIZE; c++) cellEls[r * SIZE + c].classList.add('clearing'); });
+  fullCols.forEach(c => { for (let r = 0; r < SIZE; r++) cellEls[r * SIZE + c].classList.add('clearing'); });
+
+  comboCount += 1;
+  const chainBonus = 10 * comboCount + 5 * (comboCount * (comboCount - 1) / 2);
+  const multiplier = clearedLines >= 3 ? 2 : (clearedLines === 2 ? 1.5 : 1);
+  const bonus = Math.round(chainBonus * clearedLines * multiplier);
+  score += bonus;
+  updateScore();
+  updateComboDisplay();
+  setStatus('コンボ×' + comboCount + '！ ' + clearedLines + 'れつ消えた → +' + bonus + '点');
+
+  setTimeout(() => {
+    fullRows.forEach(r => { for (let c = 0; c < SIZE; c++) board[r][c] = null; });
+    fullCols.forEach(c => { for (let r = 0; r < SIZE; r++) board[r][c] = null; });
+    renderBoard();
+  }, 260);
+}
+
+function updateScore() { document.getElementById('scoreVal').textContent = score; }
+function updateComboDisplay() {
+  const box = document.getElementById('comboBox');
+  document.getElementById('comboVal').textContent = comboCount;
+  box.style.display = comboCount > 0 ? 'block' : 'none';
+}
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+function renderBoard(previewCells, previewOk) {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if (board[r][c]) cell.style.background = board[r][c];
+      if (previewCells && previewCells.some(([pr, pc]) => pr === r && pc === c)) {
+        cell.classList.add(previewOk ? 'preview-ok' : 'preview-bad');
+        if (previewOk && !board[r][c]) cell.style.background = 'rgba(24,95,165,0.28)';
+      }
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function renderTray() {
+  const trayEl = document.getElementById('tray');
+  trayEl.innerHTML = '';
+  tray.forEach((piece, idx) => {
+    const slot = document.createElement('div');
+    slot.className = 'piece-slot';
+    slot.dataset.idx = idx;
+    if (piece.used) {
+      slot.classList.add('used');
+    } else {
+      if (!anyPlacementExists(piece.shape)) slot.classList.add('no-fit');
+      slot.addEventListener('pointerdown', onPieceDragStart);
+    }
+    const maxR = Math.max(...piece.shape.map(s => s[0])) + 1;
+    const maxC = Math.max(...piece.shape.map(s => s[1])) + 1;
+    const grid = document.createElement('div');
+    grid.className = 'piece-grid';
+    grid.style.gridTemplateColumns = `repeat(${maxC}, 13px)`;
+    grid.style.gridTemplateRows = `repeat(${maxR}, 13px)`;
+    for (let r = 0; r < maxR; r++) {
+      for (let c = 0; c < maxC; c++) {
+        const pc = document.createElement('div');
+        const has = piece.shape.some(([dr, dc]) => dr === r && dc === c);
+        pc.className = 'piece-cell' + (has ? '' : ' empty');
+        if (has) pc.style.background = piece.color;
+        grid.appendChild(pc);
+      }
+    }
+    slot.appendChild(grid);
+    trayEl.appendChild(slot);
+  });
+}
+
+function onPieceDragStart(e) {
+  const slot = e.currentTarget;
+  const idx = parseInt(slot.dataset.idx, 10);
+  const piece = tray[idx];
+  if (!piece || piece.used) return;
+  e.preventDefault();
+
+  const boardEl = document.getElementById('board');
+  const boardRect = boardEl.getBoundingClientRect();
+  const cellSize = (boardRect.width - 8 * 2 - 4 * 7) / 8;
+
+  const maxR = Math.max(...piece.shape.map(s => s[0])) + 1;
+  const maxC = Math.max(...piece.shape.map(s => s[1])) + 1;
+
+  const ghost = document.createElement('div');
+  ghost.className = 'ghost-piece';
+  ghost.style.gridTemplateColumns = `repeat(${maxC}, ${cellSize}px)`;
+  ghost.style.gridTemplateRows = `repeat(${maxR}, ${cellSize}px)`;
+  for (let r = 0; r < maxR; r++) {
+    for (let c = 0; c < maxC; c++) {
+      const gc = document.createElement('div');
+      const has = piece.shape.some(([dr, dc]) => dr === r && dc === c);
+      gc.className = 'ghost-cell';
+      gc.style.background = has ? piece.color : 'transparent';
+      ghost.appendChild(gc);
+    }
+  }
+  document.body.appendChild(ghost);
+  slot.classList.add('dragging-source');
+
+  dragState = { idx, piece, cellSize, boardRect, maxR, maxC, ghostEl: ghost, pointerId: e.pointerId };
+
+  positionGhost(e.clientX, e.clientY);
+  updatePreview(e.clientX, e.clientY);
+
+  window.addEventListener('pointermove', onPieceDragMove);
+  window.addEventListener('pointerup', onPieceDragEnd);
+  window.addEventListener('pointercancel', onPieceDragEnd);
+}
+
+function positionGhost(clientX, clientY) {
+  if (!dragState) return;
+  const liftPx = 70;
+  const w = dragState.maxC * dragState.cellSize + (dragState.maxC - 1) * 3;
+  const h = dragState.maxR * dragState.cellSize + (dragState.maxR - 1) * 3;
+  dragState.ghostEl.style.left = (clientX - w / 2) + 'px';
+  dragState.ghostEl.style.top = (clientY - liftPx - h / 2) + 'px';
+  dragState.ghostW = w;
+  dragState.ghostH = h;
+}
+
+function computeAnchor(clientX, clientY) {
+  const liftPx = 70;
+  const gap = 4, pad = 8;
+  const cs = dragState.cellSize;
+  const targetX = clientX - dragState.boardRect.left - (dragState.ghostW / 2) - pad;
+  const targetY = (clientY - liftPx) - dragState.boardRect.top - (dragState.ghostH / 2) - pad;
+  const col = Math.round(targetX / (cs + gap));
+  const row = Math.round(targetY / (cs + gap));
+  return { row, col };
+}
+
+function onPieceDragMove(e) {
+  if (!dragState) return;
+  positionGhost(e.clientX, e.clientY);
+  updatePreview(e.clientX, e.clientY);
+}
+
+function updatePreview(clientX, clientY) {
+  const { row, col } = computeAnchor(clientX, clientY);
+  dragState.lastRow = row;
+  dragState.lastCol = col;
+  const ok = canPlace(dragState.piece.shape, row, col);
+  const cells = dragState.piece.shape.map(([dr, dc]) => [row + dr, col + dc]);
+  renderBoard(cells, ok);
+  dragState.lastOk = ok;
+}
+
+function onPieceDragEnd(e) {
+  if (!dragState) return;
+  const { piece, lastRow, lastCol, lastOk, ghostEl } = dragState;
+  ghostEl.remove();
+  window.removeEventListener('pointermove', onPieceDragMove);
+  window.removeEventListener('pointerup', onPieceDragEnd);
+  window.removeEventListener('pointercancel', onPieceDragEnd);
+
+  const idx = dragState.idx;
+  dragState = null;
+
+  if (lastOk) {
+    placePiece(piece.shape, piece.color, lastRow, lastCol);
+    tray[idx].used = true;
+    renderTray();
+    checkTrayRefillAndGameOver();
+  } else {
+    renderBoard();
+    setStatus('そこには置けないよ。もう一度スライドしてみて');
+    renderTray();
+  }
+}
+
+function checkTrayRefillAndGameOver() {
+  if (tray.every(p => p.used)) { refillTray(); renderTray(); }
+  const remaining = tray.filter(p => !p.used);
+  const stuck = remaining.length > 0 && remaining.every(p => !anyPlacementExists(p.shape));
+  if (stuck) {
+    showGameOver();
+  } else {
+    setStatus('ブロックを指でつまんで、盤面までスライドして置こう');
+  }
+}
+
+// ---------- スコアの永続保存 ----------
+
+async function loadScoreHistory() {
+  if (!storageAvailable || typeof window.storage === 'undefined') {
+    historyLoaded = true;
+    renderScoreScreen();
+    return;
+  }
+  try {
+    const res = await window.storage.get('block-puzzle-scores', false);
+    scoreHistory = res && res.value ? JSON.parse(res.value) : [];
+  } catch (err) {
+    scoreHistory = [];
+  }
+  historyLoaded = true;
+  renderScoreScreen();
+}
+
+async function saveScoreHistory() {
+  if (!storageAvailable || typeof window.storage === 'undefined') return;
+  try {
+    const result = await window.storage.set('block-puzzle-scores', JSON.stringify(scoreHistory), false);
+    if (!result) storageAvailable = false;
+  } catch (err) {
+    storageAvailable = false;
+  }
+}
+
+function renderScoreScreen() {
+  const best = scoreHistory.length ? Math.max(...scoreHistory.map(s => s.score)) : 0;
+  document.getElementById('statBest').textContent = best;
+  document.getElementById('statGames').textContent = scoreHistory.length;
+
+  const rankList = document.getElementById('rankList');
+  rankList.innerHTML = '';
+  if (!historyLoaded) {
+    rankList.innerHTML = '<div class="rank-empty">読み込み中…</div>';
+    return;
+  }
+  if (scoreHistory.length === 0) {
+    rankList.innerHTML = '<div class="rank-empty">まだ記録がないよ。1回あそんでみよう！</div>';
+    return;
+  }
+  const sorted = [...scoreHistory].sort((a, b) => b.score - a.score).slice(0, 10);
+  sorted.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = 'rank-item';
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const label = i < 3 ? ['①', '②', '③'][i] : (i + 1);
+    row.innerHTML = `
+      <div class="rank-num ${rankClass}">${label}</div>
+      <div class="rank-score">${entry.score}点</div>
+      <div class="rank-date">${formatDate(entry.date)}</div>
+    `;
+    rankList.appendChild(row);
+  });
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+async function showGameOver() {
+  scoreHistory.push({ score, date: Date.now() });
+  await saveScoreHistory();
+
+  const sorted = [...scoreHistory].sort((a, b) => b.score - a.score);
+  const rank = sorted.findIndex(e => e === scoreHistory[scoreHistory.length - 1]);
+
+  document.getElementById('finalScore').textContent = 'スコア：' + score + '点';
+  const rankNoteEl = document.getElementById('rankNote');
+  if (rank === 0) {
+    rankNoteEl.textContent = '🎉 自己ベスト更新！';
+  } else if (rank >= 0 && rank < 3) {
+    rankNoteEl.textContent = '№' + (rank + 1) + ' にランクイン！';
+  } else {
+    rankNoteEl.textContent = '';
+  }
+  renderScoreScreen();
+  document.getElementById('overlay').classList.add('show');
+}
+
+// ---------- 盤面サイズ調整 ----------
+
+function sizeBoard() {
+  const container = document.getElementById('boardContainer');
+  if (!container || container.clientWidth === 0) return;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  const size = Math.max(180, Math.floor(Math.min(w, h)));
+  const boardEl = document.getElementById('board');
+  boardEl.style.width = size + 'px';
+  boardEl.style.height = size + 'px';
+}
+
+window.addEventListener('resize', sizeBoard);
+window.addEventListener('orientationchange', () => setTimeout(sizeBoard, 100));
+
+// ---------- 初期化 ----------
+
+function startGame() {
+  board = emptyBoard();
+  score = 0;
+  comboCount = 0;
+  updateScore();
+  updateComboDisplay();
+  refillTray();
+  renderBoard();
+  renderTray();
+  document.getElementById('overlay').classList.remove('show');
+  setStatus('ブロックを指でつまんで、盤面までスライドして置こう');
+  sizeBoard();
+}
+
+document.getElementById('restartBtn').addEventListener('click', startGame);
+
+document.getElementById('tabGameBtn').addEventListener('click', () => {
+  document.getElementById('tabGameBtn').classList.add('active');
+  document.getElementById('tabScoreBtn').classList.remove('active');
+  document.getElementById('gameScreen').classList.add('active');
+  document.getElementById('scoreScreen').classList.remove('active');
+  sizeBoard();
+});
+document.getElementById('tabScoreBtn').addEventListener('click', () => {
+  document.getElementById('tabScoreBtn').classList.add('active');
+  document.getElementById('tabGameBtn').classList.remove('active');
+  document.getElementById('scoreScreen').classList.add('active');
+  document.getElementById('gameScreen').classList.remove('active');
+  renderScoreScreen();
+});
+
+startGame();
+loadScoreHistory();
+</script>
+
+</body>
+</html>
