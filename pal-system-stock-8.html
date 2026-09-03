@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>パルシステム在庫</title>
+<style>
+  :root {
+    --kraft: #EDE7D8;
+    --kraft-deep: #E1D9C4;
+    --ink: #2F4538;
+    --ink-soft: #5B6B5F;
+    --stamp: #3D7068;
+    --stamp-deep: #2A4F49;
+    --warn: #C97A2E;
+    --line: #C9BFA4;
+    --card: #FBF9F2;
+  }
+
+  * { box-sizing: border-box; }
+
+  #app {
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+    background: var(--kraft);
+    color: var(--ink);
+    min-height: 100%;
+    padding: 20px 16px 40px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--ink-soft);
+    margin-bottom: 2px;
+  }
+
+  h1 {
+    font-size: 21px;
+    font-weight: 700;
+    margin: 0 0 18px;
+    letter-spacing: 0.01em;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    letter-spacing: 0.05em;
+    margin: 22px 0 8px;
+  }
+
+  .upload-box {
+    background: var(--card);
+    border: 1.5px dashed var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .upload-btn {
+    display: inline-block;
+    border: none;
+    background: var(--stamp);
+    color: #fff;
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .upload-btn:active { background: var(--stamp-deep); }
+  .upload-btn { width: 100%; margin-top: 8px; }
+  .upload-btn.secondary { background: var(--ink); margin-top: 10px; }
+
+  .manual-fallback {
+    margin-top: 12px;
+    text-align: left;
+  }
+  .manual-fallback summary {
+    font-size: 11px;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  #paste-input {
+    width: 100%;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 7px;
+    padding: 10px;
+    font-size: 13px;
+    color: var(--ink);
+    font-family: inherit;
+    resize: vertical;
+    margin-top: 8px;
+  }
+
+  .upload-hint {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+
+  .status-msg {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 10px;
+  }
+  .status-msg.error { color: var(--warn); }
+
+  .add-box {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .add-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 7px;
+    padding: 10px 10px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .add-row input[type="number"] {
+    width: 56px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 7px;
+    padding: 10px 6px;
+    font-size: 14px;
+    text-align: center;
+    color: var(--ink);
+  }
+
+  .add-row button {
+    border: none;
+    background: var(--ink);
+    color: #fff;
+    border-radius: 7px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pending-wrap {
+    background: var(--card);
+    border: 1.5px solid var(--stamp);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .pending-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .pending-sub {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-bottom: 12px;
+    line-height: 1.6;
+  }
+
+  .pending-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .pending-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 8px;
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  .pending-row input[type="number"] {
+    width: 48px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 4px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--ink);
+  }
+
+  .pending-row .unit-x { font-size: 12px; color: var(--ink-soft); }
+
+  .pending-remove {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+  }
+
+  .pending-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .confirm-btn {
+    flex: 1;
+    border: none;
+    background: var(--stamp);
+    color: #fff;
+    border-radius: 7px;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .confirm-btn:active { background: var(--stamp-deep); }
+
+  .cancel-btn {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    border-radius: 7px;
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .list { display: flex; flex-direction: column; gap: 10px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card.low { border-color: var(--warn); }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .card-name {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .card-meta {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+  }
+
+  .del-btn {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px;
+    flex-shrink: 0;
+  }
+
+  .stamps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+
+  .stamp-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--stamp);
+    flex-shrink: 0;
+  }
+  .stamp-dot.filled { background: var(--stamp); }
+  .stamp-dot.empty { background: transparent; opacity: 0.35; }
+
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .remaining-label {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .remaining-label.low-text { color: var(--warn); }
+
+  .use-btn {
+    border: none;
+    background: var(--ink);
+    color: #fff;
+    border-radius: 20px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .use-btn:active { background: var(--stamp-deep); }
+  .use-btn:disabled {
+    background: var(--line);
+    color: var(--ink-soft);
+    cursor: default;
+  }
+
+  .low-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--warn);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-top: 6px;
+    letter-spacing: 0.02em;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 13px;
+    padding: 24px 10px;
+    line-height: 1.7;
+  }
+
+  .footer-note {
+    text-align: center;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-top: 24px;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  const STORAGE_KEY = "palsystem-stock-items";
+  let items = [];
+  let loaded = false;
+  let pending = null; // array of {name, quantity} while awaiting confirmation
+  let status = null; // {text, error}
+  let storageBroken = false;
+  let busy = false;
+
+  const app = document.getElementById("app");
+
+  function render() {
+    let html = `
+      <div class="eyebrow">PAL SYSTEM STOCK</div>
+      <h1>パルシステム在庫</h1>
+
+      <div class="section-title">チャットで読み取った内容を貼り付け</div>
+      <div class="upload-box">
+        <textarea id="paste-input" rows="4" placeholder="例：&#10;たまご 1&#10;枝豆 1&#10;納豆 2"></textarea>
+        <button type="button" class="upload-btn" id="paste-trigger">この内容を読み込む</button>
+        <div class="upload-hint">チャットにスクショを送ると商品名と個数を1行ずつ返します。それをコピーしてここに貼り付けてください。</div>
+        ${status ? `<div class="status-msg ${status.error ? "error" : ""}">${escapeHtml(status.text)}</div>` : ""}
+      </div>
+    `;
+
+    if (pending && pending.length > 0) {
+      html += `
+        <div class="section-title">読み取り結果（確認して追加）</div>
+        <div class="pending-wrap">
+          <div class="pending-title">${pending.length}件見つかりました</div>
+          <div class="pending-sub">数量や名前が違っていたら直してから追加してください。金額が読み取れなかった項目は在庫には影響しません。</div>
+      `;
+      pending.forEach((p, i) => {
+        html += `
+          <div class="pending-row">
+            <input type="text" data-pend-name="${i}" value="${escapeAttr(p.name)}" />
+            <span class="unit-x">×</span>
+            <input type="number" min="1" data-pend-qty="${i}" value="${p.quantity}" />
+            <button class="pending-remove" data-pend-remove="${i}">✕</button>
+          </div>
+        `;
+      });
+      html += `
+          <div class="pending-actions">
+            <button class="cancel-btn" id="pending-cancel">取り消す</button>
+            <button class="confirm-btn" id="pending-confirm">在庫に追加する（${pending.length}件）</button>
+          </div>
+        </div>
+      `;
+    }
+
+    html += `<div class="section-title">手入力で追加</div>
+      <div class="add-box">
+        <div class="add-row">
+          <input type="text" id="name-input" placeholder="買ったもの（例：卵）" />
+          <input type="number" id="qty-input" min="1" value="1" />
+          <button id="add-btn">追加</button>
+        </div>
+      </div>
+    `;
+
+    html += `<div class="section-title">在庫一覧</div>`;
+
+    if (!loaded) {
+      html += `<div class="empty-state">読み込み中…</div>`;
+    } else if (items.length === 0) {
+      html += `<div class="empty-state">まだ登録がありません。<br>スクショか手入力で追加してください。</div>`;
+    } else {
+      html += `<div class="list">`;
+      items.forEach((item) => {
+        const isLow = item.remaining <= 1 && item.remaining > 0;
+        const isZero = item.remaining <= 0;
+        html += `
+          <div class="card ${isLow || isZero ? "low" : ""}">
+            <div class="card-top">
+              <div>
+                <div class="card-name">${escapeHtml(item.name)}</div>
+                <div class="card-meta">${item.date} に ${item.total}個 購入</div>
+              </div>
+              <button class="del-btn" data-del="${item.id}">削除</button>
+            </div>
+            <div class="stamps">${renderStamps(item)}</div>
+            <div class="card-bottom">
+              <div>
+                <span class="remaining-label ${isLow || isZero ? "low-text" : ""}">残り ${item.remaining} / ${item.total}</span>
+                ${isZero ? '<div class="low-badge">そろそろ注文</div>' : (isLow ? '<div class="low-badge">残りわずか</div>' : "")}
+              </div>
+              <button class="use-btn" data-use="${item.id}" ${item.remaining <= 0 ? "disabled" : ""}>使った −1</button>
+            </div>
+          </div>
+        `;
+      });
+      html += `</div>`;
+    }
+
+    html += `<div class="footer-note">${storageBroken ? "⚠️ 今この端末では保存がうまく動いていません。閉じると内容が消える可能性があります。" : "記録はこの端末に保存されます"}</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+    const pasteTrigger = document.getElementById("paste-trigger");
+    if (pasteTrigger) pasteTrigger.addEventListener("click", handlePasteImport);
+
+    const addBtn = document.getElementById("add-btn");
+    if (addBtn) addBtn.addEventListener("click", handleAdd);
+
+    document.querySelectorAll("[data-use]").forEach((btn) => {
+      btn.addEventListener("click", () => handleUse(btn.getAttribute("data-use")));
+    });
+    document.querySelectorAll("[data-del]").forEach((btn) => {
+      btn.addEventListener("click", () => handleDelete(btn.getAttribute("data-del")));
+    });
+
+    document.querySelectorAll("[data-pend-name]").forEach((el) => {
+      el.addEventListener("input", (e) => {
+        pending[parseInt(el.getAttribute("data-pend-name"), 10)].name = e.target.value;
+      });
+    });
+    document.querySelectorAll("[data-pend-qty]").forEach((el) => {
+      el.addEventListener("input", (e) => {
+        const v = Math.max(1, parseInt(e.target.value, 10) || 1);
+        pending[parseInt(el.getAttribute("data-pend-qty"), 10)].quantity = v;
+      });
+    });
+    document.querySelectorAll("[data-pend-remove]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const idx = parseInt(el.getAttribute("data-pend-remove"), 10);
+        pending.splice(idx, 1);
+        render();
+      });
+    });
+
+    const pc = document.getElementById("pending-confirm");
+    if (pc) pc.addEventListener("click", confirmPending);
+    const pcancel = document.getElementById("pending-cancel");
+    if (pcancel) pcancel.addEventListener("click", () => { pending = null; status = null; render(); });
+  }
+
+  function renderStamps(item) {
+    let out = "";
+    const max = Math.min(item.total, 30);
+    for (let i = 0; i < max; i++) {
+      const filled = i < item.remaining;
+      out += `<div class="stamp-dot ${filled ? "filled" : "empty"}"></div>`;
+    }
+    return out;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, "&quot;");
+  }
+
+  function todayStr() {
+    const d = new Date();
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  async function handleAdd() {
+    const nameInput = document.getElementById("name-input");
+    const qtyInput = document.getElementById("qty-input");
+    const name = nameInput.value.trim();
+    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+    if (!name) return;
+    addOrMergeItem(name, qty);
+    render();
+    await save();
+  }
+
+  function addOrMergeItem(name, qty) {
+    const existing = items.find((i) => i.name === name);
+    if (existing) {
+      existing.total += qty;
+      existing.remaining += qty;
+      existing.date = todayStr();
+    } else {
+      items.unshift({
+        id: "item_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        name,
+        total: qty,
+        remaining: qty,
+        date: todayStr(),
+      });
+    }
+  }
+
+  async function handleUse(id) {
+    const item = items.find((i) => i.id === id);
+    if (!item || item.remaining <= 0) return;
+    item.remaining -= 1;
+    render();
+    await save();
+  }
+
+  async function handleDelete(id) {
+    items = items.filter((i) => i.id !== id);
+    render();
+    await save();
+  }
+
+  async function confirmPending() {
+    if (!pending || pending.length === 0) return;
+    pending.forEach((p) => {
+      const name = (p.name || "").trim();
+      if (!name) return;
+      addOrMergeItem(name, Math.max(1, p.quantity || 1));
+    });
+    pending = null;
+    status = { text: "在庫に追加しました。", error: false };
+    render();
+    await save();
+  }
+
+  function parseLinesToItems(raw) {
+    const lines = raw.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    const parsedItems = [];
+    lines.forEach((line) => {
+      const tokens = line.split(/[\s,、]+/).filter((t) => t.length > 0);
+      if (tokens.length === 0) return;
+      let qty = 1;
+      let nameTokens = tokens;
+      const last = tokens[tokens.length - 1];
+      if (/^\d+$/.test(last)) {
+        qty = Math.max(1, parseInt(last, 10));
+        nameTokens = tokens.slice(0, -1);
+      }
+      const name = nameTokens.join(" ").trim();
+      if (name) parsedItems.push({ name, quantity: qty });
+    });
+    return parsedItems;
+  }
+
+  function handlePasteImport() {
+    const textarea = document.getElementById("paste-input");
+    const raw = (textarea ? textarea.value : "").trim();
+    if (!raw) {
+      status = { text: "貼り付ける内容がありません。", error: true };
+      render();
+      return;
+    }
+
+    const parsedItems = parseLinesToItems(raw);
+
+    if (parsedItems.length === 0) {
+      status = { text: "商品名が読み取れませんでした。「たまご 1」のような形で1行ずつ貼り付けてください。", error: true };
+      render();
+      return;
+    }
+
+    pending = parsedItems;
+    status = { text: `${pending.length}件読み取りました。内容を確認して追加してください。`, error: false };
+    if (textarea) textarea.value = "";
+    render();
+  }
+
+  async function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      storageBroken = false;
+    } catch (e) {
+      storageBroken = true;
+    }
+  }
+
+  async function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      items = raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      items = [];
+      storageBroken = true;
+    }
+    loaded = true;
+    render();
+  }
+
+  render();
+  load();
+})();
+</script>
+</body>
+</html>
