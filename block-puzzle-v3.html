@@ -372,6 +372,7 @@ function clearLines() {
       comboCount = 0;
       updateComboDisplay();
     }
+    checkTrayRefillAndGameOver();
     return;
   }
 
@@ -382,18 +383,34 @@ function clearLines() {
 
   comboCount += 1;
   const chainBonus = 10 * comboCount + 5 * (comboCount * (comboCount - 1) / 2);
-  const multiplier = clearedLines >= 3 ? 2 : (clearedLines === 2 ? 1.5 : 1);
-  const bonus = Math.round(chainBonus * clearedLines * multiplier);
+  const comboBonus = Math.round(chainBonus * clearedLines);
+  const multiLineBonus = clearedLines >= 2 ? (clearedLines - 1) * 30 : 0;
+  const bonus = comboBonus + multiLineBonus;
   score += bonus;
   updateScore();
   updateComboDisplay();
-  setStatus('コンボ×' + comboCount + '！ ' + clearedLines + 'れつ消えた → +' + bonus + '点');
+  if (multiLineBonus > 0) {
+    setStatus('コンボ×' + comboCount + '！ ' + clearedLines + '列同時消し → コンボ+' + comboBonus + '点 同時消し+' + multiLineBonus + '点');
+  } else {
+    setStatus('コンボ×' + comboCount + '！ ' + clearedLines + 'れつ消えた → +' + bonus + '点');
+  }
   // playClearSound(comboCount, clearedLines); // 一時的に無効化
 
   setTimeout(() => {
     fullRows.forEach(r => { for (let c = 0; c < SIZE; c++) board[r][c] = null; });
     fullCols.forEach(c => { for (let r = 0; r < SIZE; r++) board[r][c] = null; });
+
+    const isFullClear = board.every(row => row.every(cell => cell === null));
+    if (isFullClear) {
+      const fullClearBonus = 150;
+      score += fullClearBonus;
+      updateScore();
+      setStatus('全消しボーナス！！ +' + fullClearBonus + '点');
+    }
+
     renderBoard();
+    renderTray();
+    checkTrayRefillAndGameOver();
   }, 580);
 }
 
@@ -754,10 +771,9 @@ function onPieceDragEnd(e) {
   dragState = null;
 
   if (lastOk) {
-    placePiece(piece.shape, piece.color, lastRow, lastCol);
     tray[idx].used = true;
+    placePiece(piece.shape, piece.color, lastRow, lastCol);
     renderTray();
-    checkTrayRefillAndGameOver();
   } else {
     renderBoard();
     setStatus('そこには置けないよ。もう一度スライドしてみて');
@@ -778,15 +794,24 @@ function checkTrayRefillAndGameOver() {
 
 // ---------- スコアの永続保存 ----------
 
+const SCORE_KEY = 'block-puzzle-scores';
+
 async function loadScoreHistory() {
-  if (!storageAvailable || typeof window.storage === 'undefined') {
-    historyLoaded = true;
-    renderScoreScreen();
-    return;
+  if (storageAvailable && typeof window.storage !== 'undefined') {
+    try {
+      const res = await window.storage.get(SCORE_KEY, false);
+      scoreHistory = res && res.value ? JSON.parse(res.value) : [];
+      historyLoaded = true;
+      renderScoreScreen();
+      return;
+    } catch (err) {
+      // window.storageが使えない環境(GitHub Pagesなど)ではlocalStorageにフォールバック
+      storageAvailable = false;
+    }
   }
   try {
-    const res = await window.storage.get('block-puzzle-scores', false);
-    scoreHistory = res && res.value ? JSON.parse(res.value) : [];
+    const raw = localStorage.getItem(SCORE_KEY);
+    scoreHistory = raw ? JSON.parse(raw) : [];
   } catch (err) {
     scoreHistory = [];
   }
@@ -795,12 +820,22 @@ async function loadScoreHistory() {
 }
 
 async function saveScoreHistory() {
-  if (!storageAvailable || typeof window.storage === 'undefined') return;
-  try {
-    const result = await window.storage.set('block-puzzle-scores', JSON.stringify(scoreHistory), false);
-    if (!result) storageAvailable = false;
-  } catch (err) {
-    storageAvailable = false;
+  let saved = false;
+  if (storageAvailable && typeof window.storage !== 'undefined') {
+    try {
+      const result = await window.storage.set(SCORE_KEY, JSON.stringify(scoreHistory), false);
+      if (result) saved = true;
+      else storageAvailable = false;
+    } catch (err) {
+      storageAvailable = false;
+    }
+  }
+  if (!saved) {
+    try {
+      localStorage.setItem(SCORE_KEY, JSON.stringify(scoreHistory));
+    } catch (err) {
+      // 保存先がどちらも使えない場合は諦める(セッション内のみの記録になる)
+    }
   }
 }
 
